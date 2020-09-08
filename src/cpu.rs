@@ -1,4 +1,4 @@
-use crate::register::{Register, make_word, lsb, msb};
+use crate::register::{Register, Flag::{Z, N, H, C}, make_word, lsb, msb};
 
 const MAX_MEM_SIZE: usize = 0xFFFF;
 
@@ -43,7 +43,7 @@ impl Cpu {
 
     /// Read the next opcode from memory and execute it,
     /// returning the number of cycles that the instruction cost
-    fn step(&mut self) -> u8 {
+    fn step(&mut self) -> u32 {
         let opcode = self.fetch_byte();
         match opcode {
             // LD nn,n
@@ -164,6 +164,103 @@ impl Cpu {
             0xC1 => { let v = self.pop(); self.reg.set_bc(v); 12 },
             0xD1 => { let v = self.pop(); self.reg.set_de(v); 12 },
             0xE1 => { let v = self.pop(); self.reg.set_hl(v); 12 },
+            // ADD A,n
+            0x87 => { self.add(self.reg.a); 4 },
+            0x80 => { self.add(self.reg.b); 4 },
+            0x81 => { self.add(self.reg.c); 4 },
+            0x82 => { self.add(self.reg.d); 4 },
+            0x83 => { self.add(self.reg.e); 4 },
+            0x84 => { self.add(self.reg.h); 4 },
+            0x85 => { self.add(self.reg.l); 4 },
+            0x86 => { self.add(self.read_byte_at(self.reg.hl())); 8 },
+            0xC6 => { let v = self.fetch_byte(); self.add(v); 8 },
+            // ADC A,n
+            0x8F => { self.adc(self.reg.a); 4 },
+            0x88 => { self.adc(self.reg.b); 4 },
+            0x89 => { self.adc(self.reg.c); 4 },
+            0x8A => { self.adc(self.reg.d); 4 },
+            0x8B => { self.adc(self.reg.e); 4 },
+            0x8C => { self.adc(self.reg.h); 4 },
+            0x8D => { self.adc(self.reg.l); 4 },
+            0x8E => { self.adc(self.read_byte_at(self.reg.hl())); 8 },
+            0xCE => { let v = self.fetch_byte(); self.adc(v); 8 },
+            // SUB n
+            0x97 => { self.sub(self.reg.a); 4 },
+            0x90 => { self.sub(self.reg.b); 4 },
+            0x91 => { self.sub(self.reg.c); 4 },
+            0x92 => { self.sub(self.reg.d); 4 },
+            0x93 => { self.sub(self.reg.e); 4 },
+            0x94 => { self.sub(self.reg.h); 4 },
+            0x95 => { self.sub(self.reg.l); 4 },
+            0x96 => { self.sub(self.read_byte_at(self.reg.hl())); 8 },
+            0xD6 => { let v = self.fetch_byte(); self.sub(v); 8 },
+            // SBC A,n
+            0x9F => { self.sbc(self.reg.a); 4 },
+            0x98 => { self.sbc(self.reg.b); 4 },
+            0x99 => { self.sbc(self.reg.c); 4 },
+            0x9A => { self.sbc(self.reg.d); 4 },
+            0x9B => { self.sbc(self.reg.e); 4 },
+            0x9C => { self.sbc(self.reg.h); 4 },
+            0x9D => { self.sbc(self.reg.l); 4 },
+            0x9E => { self.sbc(self.read_byte_at(self.reg.hl())); 8 },
+            // AND n
+            0xA7 => { self.and(self.reg.a); 4 },
+            0xA0 => { self.and(self.reg.b); 4 },
+            0xA1 => { self.and(self.reg.c); 4 },
+            0xA2 => { self.and(self.reg.d); 4 },
+            0xA3 => { self.and(self.reg.e); 4 },
+            0xA4 => { self.and(self.reg.h); 4 },
+            0xA5 => { self.and(self.reg.l); 4 },
+            0xA6 => { self.and(self.read_byte_at(self.reg.hl())); 8 },
+            0xE6 => { let v = self.fetch_byte(); self.and(v); 8 },
+            // OR n
+            0xB7 => { self.or(self.reg.a); 4 },
+            0xB0 => { self.or(self.reg.b); 4 },
+            0xB1 => { self.or(self.reg.c); 4 },
+            0xB2 => { self.or(self.reg.d); 4 },
+            0xB3 => { self.or(self.reg.e); 4 },
+            0xB4 => { self.or(self.reg.h); 4 },
+            0xB5 => { self.or(self.reg.l); 4 },
+            0xB6 => { self.or(self.read_byte_at(self.reg.hl())); 8 },
+            0xF6 => { let v = self.fetch_byte(); self.or(v); 8 },
+            // XOR n
+            0xAF => { self.xor(self.reg.a); 4 },
+            0xA8 => { self.xor(self.reg.b); 4 },
+            0xA9 => { self.xor(self.reg.c); 4 },
+            0xAA => { self.xor(self.reg.d); 4 },
+            0xAB => { self.xor(self.reg.e); 4 },
+            0xAC => { self.xor(self.reg.h); 4 },
+            0xAD => { self.xor(self.reg.l); 4 },
+            0xAE => { self.xor(self.read_byte_at(self.reg.hl())); 8 },
+            0xEE => { let v = self.fetch_byte(); self.xor(v); 8 },
+            // CP n
+            0xBF => { self.cp(self.reg.a); 4 },
+            0xB8 => { self.cp(self.reg.b); 4 },
+            0xB9 => { self.cp(self.reg.c); 4 },
+            0xBA => { self.cp(self.reg.d); 4 },
+            0xBB => { self.cp(self.reg.e); 4 },
+            0xBC => { self.cp(self.reg.h); 4 },
+            0xBD => { self.cp(self.reg.l); 4 },
+            0xBE => { self.cp(self.read_byte_at(self.reg.hl())); 8 },
+            0xFE => { let v = self.fetch_byte(); self.cp(v); 8 },
+            // INC n
+            0x3C => { self.reg.a = self.inc(self.reg.a); 4 },
+            0x04 => { self.reg.b = self.inc(self.reg.b); 4 },
+            0x0C => { self.reg.c = self.inc(self.reg.c); 4 },
+            0x14 => { self.reg.d = self.inc(self.reg.d); 4 },
+            0x1C => { self.reg.e = self.inc(self.reg.e); 4 },
+            0x24 => { self.reg.h = self.inc(self.reg.h); 4 },
+            0x2C => { self.reg.l = self.inc(self.reg.l); 4 },
+            0x34 => { let hl = self.reg.hl(); let v = self.inc(self.read_byte_at(hl)); self.write_byte_at(hl, v); 12 },
+            // DEC n
+            0x3D => { self.reg.a = self.dec(self.reg.a); 4 },
+            0x05 => { self.reg.b = self.dec(self.reg.b); 4 },
+            0x0D => { self.reg.c = self.dec(self.reg.c); 4 },
+            0x15 => { self.reg.d = self.dec(self.reg.d); 4 },
+            0x1D => { self.reg.e = self.dec(self.reg.e); 4 },
+            0x25 => { self.reg.h = self.dec(self.reg.h); 4 },
+            0x2D => { self.reg.l = self.dec(self.reg.l); 4 },
+            0x35 => { let hl = self.reg.hl(); let v = self.dec(self.read_byte_at(hl)); self.write_byte_at(hl, v); 12 },
             _ => panic!("Unknown opcode found: 0x{:x}", opcode),
         }
     }
@@ -185,5 +282,91 @@ impl Cpu {
         let b2 = self.read_byte_at(self.reg.sp);
         self.reg.sp += 2;
         make_word(b2, b1)
+    }
+
+    fn _add(&mut self, val: u8, carry: bool) {
+        let c = carry as u8;
+        let res = self.reg.a.wrapping_add(val).wrapping_add(c);
+        self.reg.set_flag(Z, res == 0);
+        self.reg.set_flag(N, false);
+        self.reg.set_flag(H, (self.reg.a & 0x0F) + (val & 0x0F) + c > 0x0F);
+        self.reg.set_flag(C, (self.reg.a as u16) + (val as u16) + (c as u16) > 0xFF);
+        self.reg.a = res;
+    }
+
+    fn add(&mut self, val: u8) {
+        self._add(val, false);
+    }
+
+    fn adc(&mut self, val: u8) {
+        self._add(val, self.reg.get_flag(C));
+    }
+
+    fn _sub(&mut self, val: u8, carry: bool) {
+        let c = carry as u8;
+        let res = self.reg.a.wrapping_sub(val).wrapping_sub(c);
+        self.reg.set_flag(Z, res == 0);
+        self.reg.set_flag(N, true);
+        self.reg.set_flag(H, (self.reg.a & 0x0F) < (val & 0x0F) + c);
+        self.reg.set_flag(C, (self.reg.a as u16) < (val as u16) + (c as u16));
+    }
+
+    fn sub(&mut self, val: u8) {
+        self._sub(val, false);
+    }
+
+    fn sbc(&mut self, val: u8) {
+        self._sub(val, self.reg.get_flag(C));
+    }
+
+    fn and(&mut self, val: u8) {
+        self.reg.a &= val;
+        self.reg.set_flag(Z, self.reg.a == 0);
+        self.reg.set_flag(N, false);
+        self.reg.set_flag(H, true);
+        self.reg.set_flag(C, false);
+    }
+
+    fn or(&mut self, val: u8) {
+        self.reg.a |= val;
+        self.reg.set_flag(Z, self.reg.a == 0);
+        self.reg.set_flag(N, false);
+        self.reg.set_flag(H, false);
+        self.reg.set_flag(C, false);
+    }
+
+    fn xor(&mut self, val: u8) {
+        self.reg.a ^= val;
+        self.reg.set_flag(Z, self.reg.a == 0);
+        self.reg.set_flag(N, false);
+        self.reg.set_flag(H, false);
+        self.reg.set_flag(C, false);
+    }
+
+    fn cp(&mut self, val: u8) {
+        self.reg.set_flag(Z, self.reg.a == val);
+        self.reg.set_flag(N, true);
+        self.reg.set_flag(H, (self.reg.a & 0x0F) < (val & 0x0F));
+        self.reg.set_flag(C, self.reg.a < val);
+    }
+
+    /// Increment the value and return the results, also setting the corresponding flags
+    /// as specified by the INC instruction
+    fn inc(&mut self, val: u8) -> u8 {
+        let res = val + 1;
+        self.reg.set_flag(Z, res == 0);
+        self.reg.set_flag(N, false);
+        self.reg.set_flag(H, (self.reg.a & 0x0F) + 1 > 0x0F);
+        res
+    }
+
+    /// Decrement the value and return the results, also setting the corresponding flags
+    /// as specified by the DEC instruction
+    fn dec(&mut self, val: u8) -> u8 {
+        let res = val - 1;
+        self.reg.set_flag(Z, res == 0);
+        self.reg.set_flag(N, true);
+        self.reg.set_flag(H, (self.reg.a & 0x0F) < 1);
+        res
     }
 }

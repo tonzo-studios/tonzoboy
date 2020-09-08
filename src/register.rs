@@ -79,6 +79,21 @@ impl Register {
         self.h = msb(value);
         self.l = lsb(value);
     }
+
+    /// Return whether the flag is set to true or false
+    pub fn get_flag(&self, flag: Flag) -> bool {
+        self.f & (flag as u8) != 0
+    }
+
+    /// Set the flag to the given state
+    pub fn set_flag(&mut self, flag: Flag, state: bool) {
+        let flag = flag as u8;
+        match state {
+            true => self.f |= flag,
+            false => self.f &= !flag,
+        }
+        self.f &= 0xF0;
+    }
 }
 
 /// Creates a word from two bytes
