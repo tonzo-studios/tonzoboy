@@ -31,19 +31,19 @@ impl Register {
     // as 16-bit registers by combining them in the following
     // manner: AF, BC, DE, HL
     pub fn af(&self) -> u16 {
-        get_combined_register(self.a, self.f)
+        make_word(self.a, self.f)
     }
 
     pub fn bc(&self) -> u16 {
-        get_combined_register(self.b, self.c)
+        make_word(self.b, self.c)
     }
 
     pub fn de(&self) -> u16 {
-        get_combined_register(self.d, self.e)
+        make_word(self.d, self.e)
     }
 
     pub fn hl(&self) -> u16 {
-        get_combined_register(self.l, self.l)
+        make_word(self.l, self.l)
     }
 
     /// Return register HL and decrement HL
@@ -61,38 +61,42 @@ impl Register {
     }
 
     pub fn set_af(&mut self, value: u16) {
-        let (v1, v2) = split_combined_register(value);
-        self.a = v1;
-        self.f = v2;
+        self.a = msb(value);
+        self.f = lsb(value);
     }
 
     pub fn set_bc(&mut self, value: u16) {
-        let (v1, v2) = split_combined_register(value);
-        self.b = v1;
-        self.c = v2;
+        self.b = msb(value);
+        self.c = lsb(value);
     }
 
     pub fn set_de(&mut self, value: u16) {
-        let (v1, v2) = split_combined_register(value);
-        self.d = v1;
-        self.e = v2;
+        self.d = msb(value);
+        self.e = lsb(value);
     }
 
     pub fn set_hl(&mut self, value: u16) {
-        let (v1, v2) = split_combined_register(value);
-        self.h = v1;
-        self.l = v2;
+        self.h = msb(value);
+        self.l = lsb(value);
     }
 }
 
+/// Creates a word from two bytes
 #[inline]
-fn get_combined_register(r1: u8, r2: u8) -> u16 {
-    ((r1 as u16) << 8) | (r2 as u16)
+pub fn make_word(msb: u8, lsb: u8) -> u16 {
+    ((msb as u16) << 8) | (lsb as u16)
 }
 
+/// Return the LSB (least significant byte) of the given word
 #[inline]
-fn split_combined_register(value: u16) -> (u8, u8) {
-    ((value >> 8) as u8, (value & 0x00FF) as u8)
+pub fn lsb(word: u16) -> u8 {
+    (word & 0x00FF) as u8
+}
+
+/// Return the MSB (most significant byte) of the given word
+#[inline]
+pub fn msb(word: u16) -> u8 {
+    (word >> 8) as u8
 }
 
 pub enum Flag {
