@@ -116,7 +116,7 @@ impl Cpu {
             // LD A,n
             0x0A => { self.reg.a = self.read_byte_at(self.reg.bc()); 8 },
             0x1A => { self.reg.a = self.read_byte_at(self.reg.de()); 8 },
-            0xFA => { self.reg.a = self.read_byte_at(self.fetch_word()); 16 },
+            0xFA => { let addr = self.fetch_word(); self.reg.a = self.read_byte_at(addr); 16 },
             0x3E => { self.reg.a = self.fetch_byte(); 8 },
             // LD n,A
             0x47 => { self.reg.b = self.reg.a; 4 },
@@ -134,21 +134,21 @@ impl Cpu {
             // LD (C),A
             0xE2 => { self.write_byte_at(0xFF00 | self.reg.c as u16, self.reg.a); 8 }
             // LD A,(HLD)
-            0x3A => { self.reg.a = self.read_byte_at(self.reg.hld()); 8 },
+            0x3A => { let hld = self.reg.hld(); self.reg.a = self.read_byte_at(hld); 8 },
             // LD (HLD),A
-            0x32 => { self.write_byte_at(self.reg.hld(), self.reg.a); 8 },
+            0x32 => { let hld = self.reg.hld(); self.write_byte_at(hld, self.reg.a); 8 },
             // LD A,(HLI)
-            0x2A => { self.reg.a = self.read_byte_at(self.reg.hli()); 8 },
+            0x2A => { let hli = self.reg.hli(); self.reg.a = self.read_byte_at(hli); 8 },
             // LD (HLI),A
-            0x32 => { self.write_byte_at(self.reg.hli(), self.reg.a); 8 },
+            0x22 => { let hli = self.reg.hli(); self.write_byte_at(hli, self.reg.a); 8 },
             // LDH (n),A
-            0xE0 => { self.write_byte_at(0xFF00 | self.fetch_byte() as u16, self.reg.a); 12 },
+            0xE0 => { let addr = 0xFF00 | self.fetch_byte() as u16; self.write_byte_at(addr, self.reg.a); 12 },
             // LDH A,(n)
-            0xF0 => { self.reg.a = self.read_byte_at(0xFF00 | self.fetch_byte() as u16); 12 },
+            0xF0 => { let addr = 0xFF00 | self.fetch_byte() as u16; self.reg.a = self.read_byte_at(addr); 12 },
             // LD n,nn
-            0x01 => { self.reg.set_bc(self.fetch_word()); 12 },
-            0x11 => { self.reg.set_de(self.fetch_word()); 12 },
-            0x21 => { self.reg.set_hl(self.fetch_word()); 12 },
+            0x01 => { let v = self.fetch_word(); self.reg.set_bc(v); 12 },
+            0x11 => { let v = self.fetch_word(); self.reg.set_de(v); 12 },
+            0x21 => { let v = self.fetch_word(); self.reg.set_hl(v); 12 },
             0x31 => { self.reg.sp = self.fetch_word(); 12 },
             // LD SP,HL
             0xF9 => { self.reg.sp = self.reg.hl(); 12 },
@@ -160,10 +160,10 @@ impl Cpu {
             0xD5 => { self.push(self.reg.de()); 16 },
             0xE5 => { self.push(self.reg.hl()); 16 },
             // POP nn
-            0xF1 => { self.reg.set_af(self.pop()); 12 },
-            0xC1 => { self.reg.set_bc(self.pop()); 12 },
-            0xD1 => { self.reg.set_de(self.pop()); 12 },
-            0xE1 => { self.reg.set_hl(self.pop()); 12 },
+            0xF1 => { let v = self.pop(); self.reg.set_af(v); 12 },
+            0xC1 => { let v = self.pop(); self.reg.set_bc(v); 12 },
+            0xD1 => { let v = self.pop(); self.reg.set_de(v); 12 },
+            0xE1 => { let v = self.pop(); self.reg.set_hl(v); 12 },
             _ => panic!("Unknown opcode found: 0x{:x}", opcode),
         }
     }
