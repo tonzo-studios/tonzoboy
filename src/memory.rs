@@ -10,7 +10,6 @@ pub enum ColorMode {
     NoColor,
 }
 
-
 /// Memory Management Unit (MMU)
 pub struct Mmu {
     // TODO: Break into into memory sections (working ram, vram, oam, etc)

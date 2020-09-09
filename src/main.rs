@@ -1,6 +1,7 @@
 mod cpu;
 mod memory;
 mod register;
+mod util;
 
 use clap::{App, Arg};
 use std::path::Path;
