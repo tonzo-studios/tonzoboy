@@ -1,25 +1,27 @@
-use crate::register::{Register, Flag::{Z, N, H, C}, make_word, lsb, msb};
+use std::path::Path;
 
-const MAX_MEM_SIZE: usize = 0xFFFF;
+use crate::register::{Register, Flag::{Z, N, H, C}, make_word, lsb, msb};
+use crate::memory::Mmu;
 
 pub struct Cpu {
     reg: Register,
-    memory: [u8; 0xFFFF],
+    mmu: Mmu,
 }
 
 impl Cpu {
-    pub fn new() -> Self {
-        Self {
+    pub fn new(rom_path: &Path) -> Self {
+        let mut cpu = Self {
             reg: Register::new(),
-            // TODO: Load from rom file
-            memory: [0; MAX_MEM_SIZE],
-        }
+            mmu: Mmu::new(),
+        };
+        cpu.mmu.load_rom(rom_path);
+        cpu
     }
 
     /// Read the next byte at the position of the PC register,
     /// and advance the PC register
     pub fn fetch_byte(&mut self) -> u8 {
-        let byte = self.read_byte_at(self.reg.pc);
+        let byte = self.mmu.read_byte_at(self.reg.pc);
         self.reg.pc += 1;
         byte
     }
@@ -27,18 +29,19 @@ impl Cpu {
     /// Read the next two bytes at the position of the PC register,
     /// the first one being the LSB, and advance the PC register
     pub fn fetch_word(&mut self) -> u16 {
-        let byte1 = self.read_byte_at(self.reg.pc);
-        let byte2 = self.read_byte_at(self.reg.pc + 1);
+        let byte1 = self.mmu.read_byte_at(self.reg.pc);
+        let byte2 = self.mmu.read_byte_at(self.reg.pc + 1);
         self.reg.pc += 2;
         (byte1 as u16) | ((byte2 as u16) << 8)
     }
 
-    pub fn read_byte_at(&self, address: u16) -> u8 {
-        self.memory[address as usize]
-    }
-
-    pub fn write_byte_at(&mut self, address: u16, value: u8) {
-        self.memory[address as usize] = value
+    pub fn run (&mut self) {
+        // FIXME: run indefinitely
+        const MAX_INSTRUCTIONS_TO_RUN: u32 = 10000;
+        let mut cycles = 0;
+        for _ in 0..MAX_INSTRUCTIONS_TO_RUN {
+            cycles += self.step();
+        }
     }
 
     /// Read the next opcode from memory and execute it,
@@ -98,25 +101,25 @@ impl Cpu {
             0x6C => { self.reg.l = self.reg.h; 4 },
             0x6D => { 4 },
             // LD r, (HR)
-            0x7E => { self.reg.a = self.read_byte_at(self.reg.hl()); 8 },
-            0x46 => { self.reg.b = self.read_byte_at(self.reg.hl()); 8 },
-            0x4E => { self.reg.c = self.read_byte_at(self.reg.hl()); 8 },
-            0x56 => { self.reg.d = self.read_byte_at(self.reg.hl()); 8 },
-            0x5E => { self.reg.d = self.read_byte_at(self.reg.hl()); 8 },
-            0x66 => { self.reg.h = self.read_byte_at(self.reg.hl()); 8 },
-            0x6E => { self.reg.l = self.read_byte_at(self.reg.hl()); 8 },
+            0x7E => { self.reg.a = self.mmu.read_byte_at(self.reg.hl()); 8 },
+            0x46 => { self.reg.b = self.mmu.read_byte_at(self.reg.hl()); 8 },
+            0x4E => { self.reg.c = self.mmu.read_byte_at(self.reg.hl()); 8 },
+            0x56 => { self.reg.d = self.mmu.read_byte_at(self.reg.hl()); 8 },
+            0x5E => { self.reg.d = self.mmu.read_byte_at(self.reg.hl()); 8 },
+            0x66 => { self.reg.h = self.mmu.read_byte_at(self.reg.hl()); 8 },
+            0x6E => { self.reg.l = self.mmu.read_byte_at(self.reg.hl()); 8 },
             // LD (HL), r
-            0x70 => { self.write_byte_at(self.reg.hl(), self.reg.b); 8 },
-            0x71 => { self.write_byte_at(self.reg.hl(), self.reg.c); 8 },
-            0x72 => { self.write_byte_at(self.reg.hl(), self.reg.d); 8 },
-            0x73 => { self.write_byte_at(self.reg.hl(), self.reg.e); 8 },
-            0x74 => { self.write_byte_at(self.reg.hl(), self.reg.h); 8 },
-            0x75 => { self.write_byte_at(self.reg.hl(), self.reg.l); 8 },
-            0x36 => { let v = self.fetch_byte(); self.write_byte_at(self.reg.hl(), v); 12 },
+            0x70 => { self.mmu.write_byte_at(self.reg.hl(), self.reg.b); 8 },
+            0x71 => { self.mmu.write_byte_at(self.reg.hl(), self.reg.c); 8 },
+            0x72 => { self.mmu.write_byte_at(self.reg.hl(), self.reg.d); 8 },
+            0x73 => { self.mmu.write_byte_at(self.reg.hl(), self.reg.e); 8 },
+            0x74 => { self.mmu.write_byte_at(self.reg.hl(), self.reg.h); 8 },
+            0x75 => { self.mmu.write_byte_at(self.reg.hl(), self.reg.l); 8 },
+            0x36 => { let v = self.fetch_byte(); self.mmu.write_byte_at(self.reg.hl(), v); 12 },
             // LD A,n
-            0x0A => { self.reg.a = self.read_byte_at(self.reg.bc()); 8 },
-            0x1A => { self.reg.a = self.read_byte_at(self.reg.de()); 8 },
-            0xFA => { let addr = self.fetch_word(); self.reg.a = self.read_byte_at(addr); 16 },
+            0x0A => { self.reg.a = self.mmu.read_byte_at(self.reg.bc()); 8 },
+            0x1A => { self.reg.a = self.mmu.read_byte_at(self.reg.de()); 8 },
+            0xFA => { let addr = self.fetch_word(); self.reg.a = self.mmu.read_byte_at(addr); 16 },
             0x3E => { self.reg.a = self.fetch_byte(); 8 },
             // LD n,A
             0x47 => { self.reg.b = self.reg.a; 4 },
@@ -125,26 +128,26 @@ impl Cpu {
             0x5F => { self.reg.e = self.reg.a; 4 },
             0x67 => { self.reg.h = self.reg.a; 4 },
             0x6F => { self.reg.l = self.reg.a; 4 },
-            0x02 => { self.write_byte_at(self.reg.bc(), self.reg.a); 8 },
-            0x12 => { self.write_byte_at(self.reg.de(), self.reg.a); 8 },
-            0x77 => { self.write_byte_at(self.reg.hl(), self.reg.a); 8 },
-            0xEA => { let addr = self.fetch_word(); self.write_byte_at(addr, self.reg.a); 16 },
+            0x02 => { self.mmu.write_byte_at(self.reg.bc(), self.reg.a); 8 },
+            0x12 => { self.mmu.write_byte_at(self.reg.de(), self.reg.a); 8 },
+            0x77 => { self.mmu.write_byte_at(self.reg.hl(), self.reg.a); 8 },
+            0xEA => { let addr = self.fetch_word(); self.mmu.write_byte_at(addr, self.reg.a); 16 },
             // LD A,(C)
-            0xF2 => { self.reg.a = self.read_byte_at(0xFF00 | self.reg.c as u16); 8 },
+            0xF2 => { self.reg.a = self.mmu.read_byte_at(0xFF00 | self.reg.c as u16); 8 },
             // LD (C),A
-            0xE2 => { self.write_byte_at(0xFF00 | self.reg.c as u16, self.reg.a); 8 }
+            0xE2 => { self.mmu.write_byte_at(0xFF00 | self.reg.c as u16, self.reg.a); 8 }
             // LD A,(HLD)
-            0x3A => { let hld = self.reg.hld(); self.reg.a = self.read_byte_at(hld); 8 },
+            0x3A => { let hld = self.reg.hld(); self.reg.a = self.mmu.read_byte_at(hld); 8 },
             // LD (HLD),A
-            0x32 => { let hld = self.reg.hld(); self.write_byte_at(hld, self.reg.a); 8 },
+            0x32 => { let hld = self.reg.hld(); self.mmu.write_byte_at(hld, self.reg.a); 8 },
             // LD A,(HLI)
-            0x2A => { let hli = self.reg.hli(); self.reg.a = self.read_byte_at(hli); 8 },
+            0x2A => { let hli = self.reg.hli(); self.reg.a = self.mmu.read_byte_at(hli); 8 },
             // LD (HLI),A
-            0x22 => { let hli = self.reg.hli(); self.write_byte_at(hli, self.reg.a); 8 },
+            0x22 => { let hli = self.reg.hli(); self.mmu.write_byte_at(hli, self.reg.a); 8 },
             // LDH (n),A
-            0xE0 => { let addr = 0xFF00 | self.fetch_byte() as u16; self.write_byte_at(addr, self.reg.a); 12 },
+            0xE0 => { let addr = 0xFF00 | self.fetch_byte() as u16; self.mmu.write_byte_at(addr, self.reg.a); 12 },
             // LDH A,(n)
-            0xF0 => { let addr = 0xFF00 | self.fetch_byte() as u16; self.reg.a = self.read_byte_at(addr); 12 },
+            0xF0 => { let addr = 0xFF00 | self.fetch_byte() as u16; self.reg.a = self.mmu.read_byte_at(addr); 12 },
             // LD n,nn
             0x01 => { let v = self.fetch_word(); self.reg.set_bc(v); 12 },
             0x11 => { let v = self.fetch_word(); self.reg.set_de(v); 12 },
@@ -153,7 +156,7 @@ impl Cpu {
             // LD SP,HL
             0xF9 => { self.reg.sp = self.reg.hl(); 12 },
             // LD (nn),SP
-            0x08 => { let addr = self.fetch_word(); self.write_byte_at(addr, lsb(self.reg.sp)); self.write_byte_at(addr + 1, msb(self.reg.sp)); 20 },
+            0x08 => { let addr = self.fetch_word(); self.mmu.write_byte_at(addr, lsb(self.reg.sp)); self.mmu.write_byte_at(addr + 1, msb(self.reg.sp)); 20 },
             // PUSH nn
             0xF5 => { self.push(self.reg.af()); 16 },
             0xC5 => { self.push(self.reg.bc()); 16 },
@@ -172,7 +175,7 @@ impl Cpu {
             0x83 => { self.add(self.reg.e); 4 },
             0x84 => { self.add(self.reg.h); 4 },
             0x85 => { self.add(self.reg.l); 4 },
-            0x86 => { self.add(self.read_byte_at(self.reg.hl())); 8 },
+            0x86 => { self.add(self.mmu.read_byte_at(self.reg.hl())); 8 },
             0xC6 => { let v = self.fetch_byte(); self.add(v); 8 },
             // ADC A,n
             0x8F => { self.adc(self.reg.a); 4 },
@@ -182,7 +185,7 @@ impl Cpu {
             0x8B => { self.adc(self.reg.e); 4 },
             0x8C => { self.adc(self.reg.h); 4 },
             0x8D => { self.adc(self.reg.l); 4 },
-            0x8E => { self.adc(self.read_byte_at(self.reg.hl())); 8 },
+            0x8E => { self.adc(self.mmu.read_byte_at(self.reg.hl())); 8 },
             0xCE => { let v = self.fetch_byte(); self.adc(v); 8 },
             // SUB n
             0x97 => { self.sub(self.reg.a); 4 },
@@ -192,7 +195,7 @@ impl Cpu {
             0x93 => { self.sub(self.reg.e); 4 },
             0x94 => { self.sub(self.reg.h); 4 },
             0x95 => { self.sub(self.reg.l); 4 },
-            0x96 => { self.sub(self.read_byte_at(self.reg.hl())); 8 },
+            0x96 => { self.sub(self.mmu.read_byte_at(self.reg.hl())); 8 },
             0xD6 => { let v = self.fetch_byte(); self.sub(v); 8 },
             // SBC A,n
             0x9F => { self.sbc(self.reg.a); 4 },
@@ -202,7 +205,7 @@ impl Cpu {
             0x9B => { self.sbc(self.reg.e); 4 },
             0x9C => { self.sbc(self.reg.h); 4 },
             0x9D => { self.sbc(self.reg.l); 4 },
-            0x9E => { self.sbc(self.read_byte_at(self.reg.hl())); 8 },
+            0x9E => { self.sbc(self.mmu.read_byte_at(self.reg.hl())); 8 },
             // AND n
             0xA7 => { self.and(self.reg.a); 4 },
             0xA0 => { self.and(self.reg.b); 4 },
@@ -211,7 +214,7 @@ impl Cpu {
             0xA3 => { self.and(self.reg.e); 4 },
             0xA4 => { self.and(self.reg.h); 4 },
             0xA5 => { self.and(self.reg.l); 4 },
-            0xA6 => { self.and(self.read_byte_at(self.reg.hl())); 8 },
+            0xA6 => { self.and(self.mmu.read_byte_at(self.reg.hl())); 8 },
             0xE6 => { let v = self.fetch_byte(); self.and(v); 8 },
             // OR n
             0xB7 => { self.or(self.reg.a); 4 },
@@ -221,7 +224,7 @@ impl Cpu {
             0xB3 => { self.or(self.reg.e); 4 },
             0xB4 => { self.or(self.reg.h); 4 },
             0xB5 => { self.or(self.reg.l); 4 },
-            0xB6 => { self.or(self.read_byte_at(self.reg.hl())); 8 },
+            0xB6 => { self.or(self.mmu.read_byte_at(self.reg.hl())); 8 },
             0xF6 => { let v = self.fetch_byte(); self.or(v); 8 },
             // XOR n
             0xAF => { self.xor(self.reg.a); 4 },
@@ -231,7 +234,7 @@ impl Cpu {
             0xAB => { self.xor(self.reg.e); 4 },
             0xAC => { self.xor(self.reg.h); 4 },
             0xAD => { self.xor(self.reg.l); 4 },
-            0xAE => { self.xor(self.read_byte_at(self.reg.hl())); 8 },
+            0xAE => { self.xor(self.mmu.read_byte_at(self.reg.hl())); 8 },
             0xEE => { let v = self.fetch_byte(); self.xor(v); 8 },
             // CP n
             0xBF => { self.cp(self.reg.a); 4 },
@@ -241,7 +244,7 @@ impl Cpu {
             0xBB => { self.cp(self.reg.e); 4 },
             0xBC => { self.cp(self.reg.h); 4 },
             0xBD => { self.cp(self.reg.l); 4 },
-            0xBE => { self.cp(self.read_byte_at(self.reg.hl())); 8 },
+            0xBE => { self.cp(self.mmu.read_byte_at(self.reg.hl())); 8 },
             0xFE => { let v = self.fetch_byte(); self.cp(v); 8 },
             // INC n
             0x3C => { self.reg.a = self.inc(self.reg.a); 4 },
@@ -251,7 +254,7 @@ impl Cpu {
             0x1C => { self.reg.e = self.inc(self.reg.e); 4 },
             0x24 => { self.reg.h = self.inc(self.reg.h); 4 },
             0x2C => { self.reg.l = self.inc(self.reg.l); 4 },
-            0x34 => { let hl = self.reg.hl(); let v = self.inc(self.read_byte_at(hl)); self.write_byte_at(hl, v); 12 },
+            0x34 => { let hl = self.reg.hl(); let v = self.inc(self.mmu.read_byte_at(hl)); self.mmu.write_byte_at(hl, v); 12 },
             // DEC n
             0x3D => { self.reg.a = self.dec(self.reg.a); 4 },
             0x05 => { self.reg.b = self.dec(self.reg.b); 4 },
@@ -260,8 +263,8 @@ impl Cpu {
             0x1D => { self.reg.e = self.dec(self.reg.e); 4 },
             0x25 => { self.reg.h = self.dec(self.reg.h); 4 },
             0x2D => { self.reg.l = self.dec(self.reg.l); 4 },
-            0x35 => { let hl = self.reg.hl(); let v = self.dec(self.read_byte_at(hl)); self.write_byte_at(hl, v); 12 },
-            _ => panic!("Unknown opcode found: 0x{:x}", opcode),
+            0x35 => { let hl = self.reg.hl(); let v = self.dec(self.mmu.read_byte_at(hl)); self.mmu.write_byte_at(hl, v); 12 },
+            _ => panic!("Unknown opcode {:x} found at address {:x}", opcode, self.reg.pc),
         }
     }
 
@@ -269,17 +272,17 @@ impl Cpu {
     /// and decrement the stack pointer twice
     fn push(&mut self, word: u16) {
         self.reg.sp -= 1;
-        self.write_byte_at(self.reg.sp, msb(word));
+        self.mmu.write_byte_at(self.reg.sp, msb(word));
         self.reg.sp -= 1;
-        self.write_byte_at(self.reg.sp, lsb(word));
+        self.mmu.write_byte_at(self.reg.sp, lsb(word));
     }
 
     /// Pop two bytes off the stack and return the resulting combined word,
     /// and increment the stack pointer twice
     fn pop(&mut self) -> u16 {
-        let b1 = self.read_byte_at(self.reg.sp);
+        let b1 = self.mmu.read_byte_at(self.reg.sp);
         self.reg.sp += 1;
-        let b2 = self.read_byte_at(self.reg.sp);
+        let b2 = self.mmu.read_byte_at(self.reg.sp);
         self.reg.sp += 2;
         make_word(b2, b1)
     }

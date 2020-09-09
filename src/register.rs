@@ -1,3 +1,5 @@
+use crate::util::{lsb, make_word, msb};
+
 pub struct Register {
     pub a: u8,
     f: u8, // flags register
@@ -46,20 +48,6 @@ impl Register {
         make_word(self.l, self.l)
     }
 
-    /// Return register HL and decrement HL
-    pub fn hld(&mut self) -> u16 {
-        let hl = self.hl();
-        self.set_hl(hl - 1);
-        hl
-    }
-
-    /// Return register HL and increment HL
-    pub fn hli(&mut self) -> u16 {
-        let hl = self.hl();
-        self.set_hl(hl + 1);
-        hl
-    }
-
     pub fn set_af(&mut self, value: u16) {
         self.a = msb(value);
         self.f = lsb(value);
@@ -94,24 +82,6 @@ impl Register {
         }
         self.f &= 0xF0;
     }
-}
-
-/// Creates a word from two bytes
-#[inline]
-pub fn make_word(msb: u8, lsb: u8) -> u16 {
-    ((msb as u16) << 8) | (lsb as u16)
-}
-
-/// Return the LSB (least significant byte) of the given word
-#[inline]
-pub fn lsb(word: u16) -> u8 {
-    (word & 0x00FF) as u8
-}
-
-/// Return the MSB (most significant byte) of the given word
-#[inline]
-pub fn msb(word: u16) -> u8 {
-    (word >> 8) as u8
 }
 
 pub enum Flag {
