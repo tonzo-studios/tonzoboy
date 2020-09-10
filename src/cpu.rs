@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::register::{Register, Flag::*};
+use crate::register::{Register, Flag, Flag::*};
 use crate::util::{make_word, lsb, msb, swap, rotate_left, rotate_right};
 use crate::memory::Mmu;
 
@@ -37,12 +37,8 @@ impl Cpu {
     }
 
     pub fn run (&mut self) {
-        // FIXME: run indefinitely
-        const MAX_INSTRUCTIONS_TO_RUN: u32 = 10000;
         let mut cycles = 0;
-        for _ in 0..MAX_INSTRUCTIONS_TO_RUN {
-            cycles += self.step();
-        }
+        cycles += self.step();
     }
 
     /// Read the next opcode from memory and execute it,
@@ -280,6 +276,18 @@ impl Cpu {
             0x17 => { self.reg.a = self.rl(self.reg.a); 4 },
             0x0F => { self.reg.a = self.rrc(self.reg.a); 4 },
             0x1F => { self.reg.a = self.rr(self.reg.a); 4 },
+            // Jumps
+            0xC3 => { self.reg.pc = self.fetch_word(); 12 },
+            0xC2 => { let addr = self.fetch_word(); self.jump_conditional(addr, Z, false); 12 },
+            0xCA => { let addr = self.fetch_word(); self.jump_conditional(addr, Z, true); 12 },
+            0xD2 => { let addr = self.fetch_word(); self.jump_conditional(addr, C, false); 12 },
+            0xDA => { let addr = self.fetch_word(); self.jump_conditional(addr, C, true); 12 },
+            0xE9 => { self.reg.pc = self.reg.hl(); 4 },
+            0x18 => { self.reg.pc = self.reg.pc + (self.fetch_byte() as u16); 8 },
+            0x20 => { let addr = self.fetch_byte() as u16; self.jump_conditional(addr, Z, false); 8 },
+            0x28 => { let addr = self.fetch_byte() as u16; self.jump_conditional(addr, Z, true); 8 },
+            0x30 => { let addr = self.fetch_byte() as u16; self.jump_conditional(addr, C, false); 8 },
+            0x38 => { let addr = self.fetch_byte() as u16; self.jump_conditional(addr, C, true); 8 },
             _ => panic!("Unknown opcode {:x} found at address {:x}", opcode, self.reg.pc),
         }
     }
@@ -721,9 +729,9 @@ impl Cpu {
     }
 
     fn rr(&mut self, val: u8) -> u8 {
-        let c = self.reg.get_flag(C) as u8;
+        let c = self.reg.get_flag(C) as u16;
         self.reg.set_flag(C, val & 1 != 0);
-        let res = (val >> 1) | (c << 8);
+        let res = (((val as u16) >> 1) | (c << 8)) as u8;
         self._rotate_shift_flag_update(res);
         res
     }
@@ -761,6 +769,13 @@ impl Cpu {
         match state {
             true => val | mask,
             false => val & !mask
+        }
+    }
+
+    /// Jump to the given address if the flag has the state passed as argument
+    fn jump_conditional(&mut self, addr: u16, flag: Flag, state: bool) {
+        if self.reg.get_flag(flag) == state {
+            self.reg.pc = addr;
         }
     }
 }
